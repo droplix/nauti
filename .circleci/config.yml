@@ -1,0 +1,82 @@
+version: 2
+
+defaults: &defaults
+  working_directory: ~/repo
+  docker:
+    - image: cimg/node:18.20.4
+
+jobs:
+  install:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: npm cache clean --force
+      - run: npm install --verbose --legacy-peer-deps=true
+      - run: npm run checksum
+      - save_cache:
+          paths:
+            - node_modules
+            - checksum.txt
+          key: v1-dependencies-{{ checksum "checksum.txt" }}
+      - persist_to_workspace:
+          root: ~/repo
+          paths: .
+  build:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "checksum.txt" }}
+            - v1-dependencies-
+      - run: ls -al
+      - run: npm run build
+      - run: ls -al
+      - save_cache:
+          paths:
+            - node_modules
+            - checksum.txt
+          key: v1-dependencies-{{ checksum "checksum.txt" }}
+      - save_cache:
+          paths:
+            - dist
+            - checksum.txt
+          key: v1-dist-{{ checksum "checksum.txt" }}
+
+  deploy:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - restore_cache:
+          keys:
+            - v1-dist-{{ checksum "checksum.txt" }}
+            - v1-dist-
+            - v1-dependencies-{{ checksum "checksum.txt" }}
+            - v1-dependencies-
+      - run: ls -al
+      - run: npm publish --access=public
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      - install:
+          filters:
+            tags:
+              only: /.*/
+      - build:
+          requires:
+            - install
+          filters:
+            tags:
+              only: /.*/
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - publish
+                - /iteration\/.*/
