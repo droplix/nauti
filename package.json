@@ -11,6 +11,7 @@
     "files": [
         "lib",
         "bin",
+        "artworks",
         "LICENSE",
         "README.md",
         "package.json"
